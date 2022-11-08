@@ -3,4 +3,17 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+  <uses-feature
+    android:name="android.hardware.bluetooth_le"
+    android:required="true" />
+
+  <application>
+    <service android:name="com.mackentoch.beaconsandroid.BeaconsAndroidTransitionService"/>
+
+    <receiver android:name="com.mackentoch.beaconsandroid.BeaconsAndroidBootReceiver" android:exported="false">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED"/>
+      </intent-filter>
+    </receiver>
+  </application>
 </manifest>
