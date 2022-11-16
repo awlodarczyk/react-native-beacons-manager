@@ -87,7 +87,6 @@ public class BeaconsAndroidModule extends ReactContextBaseJavaModule implements 
     this.mBeaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout(EDDYSTONE_UID_LAYOUT));
     this.mBeaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout(EDDYSTONE_URL_LAYOUT));
     this.mBeaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout(EDDYSTONE_TLM_LAYOUT));
-
     // Fix beacon empty when screen off
 
 //        ScanFilter.Builder builder = null;
@@ -137,6 +136,7 @@ public class BeaconsAndroidModule extends ReactContextBaseJavaModule implements 
         mBeaconManager.setEnableScheduledScanJobs(false);
         mBeaconManager.setBackgroundBetweenScanPeriod(0);
         mBeaconManager.setBackgroundScanPeriod(1100);
+
         bindManager();
       }
 
@@ -188,17 +188,17 @@ public class BeaconsAndroidModule extends ReactContextBaseJavaModule implements 
   }
 
   public void bindManager() {
-//        if (!mBeaconManager.isBound(this)) {
-//            Log.d(LOG_TAG, "BeaconsAndroidModule - bindManager: ");
-//            mBeaconManager.bind(this);
-//        }
+    if (!mBeaconManager.isBound(this)) {
+      Log.d(LOG_TAG, "BeaconsAndroidModule - bindManager: ");
+      mBeaconManager.bind(this);
+    }
   }
 
   public void unbindManager() {
-//        if (mBeaconManager.isBound(this)) {
-//            Log.d(LOG_TAG, "BeaconsAndroidModule - unbindManager: ");
-//            mBeaconManager.unbind(this);
-//        }
+    if (mBeaconManager.isBound(this)) {
+      Log.d(LOG_TAG, "BeaconsAndroidModule - unbindManager: ");
+      mBeaconManager.unbind(this);
+    }
   }
 
   @ReactMethod
@@ -545,8 +545,8 @@ public class BeaconsAndroidModule extends ReactContextBaseJavaModule implements 
     return new Region(
       regionId,
       id1,
-      major.length() > 0 ? Identifier.parse(major) : null,
-      minor.length() > 0 ? Identifier.parse(minor) : null
+      major != null && major.length() > 0 ? Identifier.parse(major) : null,
+      minor != null && minor.length() > 0 ? Identifier.parse(minor) : null
     );
   }
 
