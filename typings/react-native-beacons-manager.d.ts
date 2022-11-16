@@ -54,7 +54,8 @@ declare module 'react-native-beacons-manager' {
     setHardwareEqualityEnforced(
       flag: boolean
     ): void;
-    init():void;
+    init(): void;
+
     detectIBeacons(): void;
 
     detectAltBeacons(): void;

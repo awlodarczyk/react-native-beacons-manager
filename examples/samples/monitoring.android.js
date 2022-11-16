@@ -32,6 +32,7 @@ class beaconMonitoringOnly extends Component {
    const region = { identifier, uuid };
 
    // start iBeacon detection (later will add Eddystone and Nordic Semiconductor beacons)
+   Beacons.init();
    Beacons.detectIBeacons();
    // Monitor beacons inside the region
    Beacons
