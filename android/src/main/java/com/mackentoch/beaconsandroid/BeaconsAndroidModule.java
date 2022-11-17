@@ -498,11 +498,13 @@ public class BeaconsAndroidModule extends ReactContextBaseJavaModule
   private RangeNotifier mRangeNotifier = new RangeNotifier() {
     @Override
     public void didRangeBeaconsInRegion(Collection<Beacon> beacons, Region region) {
+      if (shouldDropEmptyRanges && beacons.isEmpty()) {
+        return;
+      }
       Log.d(LOG_TAG, "rangingConsumer didRangeBeaconsInRegion, beacons: " + beacons.toString());
       Log.d(LOG_TAG, "rangingConsumer didRangeBeaconsInRegion, region: " + region.toString());
-      if (shouldDropEmptyRanges || !beacons.isEmpty()) {
-        sendEvent(mReactContext, "beaconsDidRange", createRangingResponse(beacons, region));
-      }
+      sendEvent(mReactContext, "beaconsDidRange", createRangingResponse(beacons, region));
+
       if (!beacons.isEmpty()) {
         wakeUpAppIfNotRunning();
       }
