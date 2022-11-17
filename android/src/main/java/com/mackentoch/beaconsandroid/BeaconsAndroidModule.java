@@ -40,6 +40,7 @@ import org.altbeacon.beacon.Identifier;
 import org.altbeacon.beacon.MonitorNotifier;
 import org.altbeacon.beacon.RangeNotifier;
 import org.altbeacon.beacon.Region;
+import org.altbeacon.beacon.powersave.BackgroundPowerSaver;
 import org.altbeacon.beacon.service.ArmaRssiFilter;
 import org.altbeacon.beacon.service.RunningAverageRssiFilter;
 
@@ -49,7 +50,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-public class BeaconsAndroidModule extends ReactContextBaseJavaModule implements BeaconConsumer {
+public class BeaconsAndroidModule extends ReactContextBaseJavaModule
+//  implements BeaconConsumer
+{
   public static final String LOG_TAG = "BeaconsAndroidModule";
   private static final String NOTIFICATION_CHANNEL_ID = "BeaconsAndroidModule";
   private static final int RUNNING_AVG_RSSI_FILTER = 0;
@@ -59,6 +62,7 @@ public class BeaconsAndroidModule extends ReactContextBaseJavaModule implements 
   private ReactApplicationContext mReactContext;
   private static boolean channelCreated = false;
   private static boolean isActivityActivated = true;
+  private static boolean shouldDropEmptyRanges = false;
   public static final String TRANSITION_TASK_NAME = "beacons-monitor-transition";
 
   public static final String RUUVI_LAYOUT = "m:0-2=0499,i:4-19,i:20-21,i:22-23,p:24-24"; // TBD
@@ -87,15 +91,51 @@ public class BeaconsAndroidModule extends ReactContextBaseJavaModule implements 
     this.mBeaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout(EDDYSTONE_UID_LAYOUT));
     this.mBeaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout(EDDYSTONE_URL_LAYOUT));
     this.mBeaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout(EDDYSTONE_TLM_LAYOUT));
-    // Fix beacon empty when screen off
+    // Uncomment the code below to use a foreground service to scan for beacons. This unlocks
+    // the ability to continually scan for long periods of time in the background on Andorid 8+
+    // in exchange for showing an icon at the top of the screen and a always-on notification to
+    // communicate to users that your app is using resources in the background.
 
-//        ScanFilter.Builder builder = null;
-//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-//            builder = new ScanFilter.Builder();
-//            builder.setManufacturerData(0x004c, new byte[]{});
-//            ScanFilter filter = builder.build();
-//        }
+    Resources res = mApplicationContext.getResources();
+    String packageName = mApplicationContext.getPackageName();
+    String CHANNEL_ID = "rn-push-notification-channel-id";
+    String CHANNEL_NAME = res.getString(res.getIdentifier("notification_channel_name", "string", packageName));
+    String CHANNEL_DESCRIPTION = res.getString(res.getIdentifier("notification_channel_description", "string", packageName));
 
+    Notification.Builder builder = new Notification.Builder(mApplicationContext);
+    builder.setSmallIcon(mApplicationContext.getResources().getIdentifier("ic_launcher", "mipmap", mApplicationContext.getPackageName()));
+    builder.setPriority(Notification.PRIORITY_MIN);
+    //builder.setContentTitle("Scanning for Beacons");
+    builder.setContentTitle(CHANNEL_DESCRIPTION);
+
+    Class intentClass = getMainActivityClass();
+    Intent intent = new Intent(mApplicationContext, intentClass);
+    PendingIntent pendingIntent = PendingIntent.getActivity(
+      mApplicationContext, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT
+    );
+    builder.setContentIntent(pendingIntent);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      NotificationChannel channel = new NotificationChannel(CHANNEL_ID,
+        CHANNEL_NAME, NotificationManager.IMPORTANCE_LOW);
+      channel.setDescription(CHANNEL_DESCRIPTION);
+      NotificationManager notificationManager = (NotificationManager) mApplicationContext.getSystemService(
+        Context.NOTIFICATION_SERVICE);
+      notificationManager.createNotificationChannel(channel);
+      builder.setChannelId(channel.getId());
+    }
+    if (this.mBeaconManager.getForegroundServiceNotificationId() != 456) {
+      this.mBeaconManager.enableForegroundServiceScanning(builder.build(), 456);
+    }
+    // For the above foreground scanning service to be useful, you need to disable
+    // JobScheduler-based scans (used on Android 8+) and set a fast background scan
+    // cycle that would otherwise be disallowed by the operating system.
+    //
+    this.mBeaconManager.setEnableScheduledScanJobs(false);
+    this.mBeaconManager.setBackgroundBetweenScanPeriod(0);
+    this.mBeaconManager.setBackgroundScanPeriod(1100);
+
+    this.mBeaconManager.addRangeNotifier(mRangeNotifier);
+    this.mBeaconManager.addMonitorNotifier(mMonitorNotifier);
   }
 
   @ReactMethod
@@ -105,37 +145,33 @@ public class BeaconsAndroidModule extends ReactContextBaseJavaModule implements 
       // Fix: may not be called after consumers are already bound beacon
       if (mBeaconManager != null && !mBeaconManager.isAnyConsumerBound()) {
 
-        Resources res = mApplicationContext.getResources();
-        String packageName = mApplicationContext.getPackageName();
-        String CHANNEL_ID = "rn-push-notification-channel-id";
-        String CHANNEL_NAME = res.getString(res.getIdentifier("notification_channel_name", "string", packageName));
-        String CHANNEL_DESCRIPTION = res.getString(res.getIdentifier("notification_channel_description", "string", packageName));
+//        Resources res = mApplicationContext.getResources();
+//        String packageName = mApplicationContext.getPackageName();
+//        String CHANNEL_ID = "rn-push-notification-channel-id";
+//        String CHANNEL_NAME = res.getString(res.getIdentifier("notification_channel_name", "string", packageName));
+//        String CHANNEL_DESCRIPTION = res.getString(res.getIdentifier("notification_channel_description", "string", packageName));
+//
+//        Notification.Builder builder = new Notification.Builder(mApplicationContext);
+//        builder.setSmallIcon(mApplicationContext.getResources().getIdentifier("ic_notification", "mipmap", mApplicationContext.getPackageName()));
+//        //builder.setContentTitle("Scanning for Beacons");
+//        builder.setContentTitle(CHANNEL_DESCRIPTION);
+//        Class intentClass = getMainActivityClass();
+//        Intent intent = new Intent(mApplicationContext, intentClass);
+//        PendingIntent pendingIntent = PendingIntent.getActivity(mApplicationContext, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+//        builder.setContentIntent(pendingIntent);
+//
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+//          NotificationChannel channel = new NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_LOW);
+//          channel.setDescription(CHANNEL_DESCRIPTION);
+//          NotificationManager notificationManager = (NotificationManager) mApplicationContext.getSystemService(Context.NOTIFICATION_SERVICE);
+//          notificationManager.createNotificationChannel(channel);
+//          builder.setChannelId(channel.getId());
+//        }
 
-        Notification.Builder builder = new Notification.Builder(mApplicationContext);
-        builder.setSmallIcon(mApplicationContext.getResources().getIdentifier("ic_notification", "mipmap", mApplicationContext.getPackageName()));
-        //builder.setContentTitle("Scanning for Beacons");
-        builder.setContentTitle(CHANNEL_DESCRIPTION);
-        Class intentClass = getMainActivityClass();
-        Intent intent = new Intent(mApplicationContext, intentClass);
-        PendingIntent pendingIntent = PendingIntent.getActivity(mApplicationContext, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-        builder.setContentIntent(pendingIntent);
+//        mBeaconManager.enableForegroundServiceScanning(builder.build(), 456);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-          NotificationChannel channel = new NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_LOW);
-          channel.setDescription(CHANNEL_DESCRIPTION);
-          NotificationManager notificationManager = (NotificationManager) mApplicationContext.getSystemService(Context.NOTIFICATION_SERVICE);
-          notificationManager.createNotificationChannel(channel);
-          builder.setChannelId(channel.getId());
-        }
-        mBeaconManager.setForegroundScanPeriod(0);
-        mBeaconManager.enableForegroundServiceScanning(builder.build(), 456);
-        // For the above foreground scanning service to be useful, you need to disable
-        // JobScheduler-based scans (used on Android 8+) and set a fast background scan
-        // cycle that would otherwise be disallowed by the operating system.
-        //
-        mBeaconManager.setEnableScheduledScanJobs(false);
-        mBeaconManager.setBackgroundBetweenScanPeriod(0);
-        mBeaconManager.setBackgroundScanPeriod(1100);
+        sendEvent(mReactContext, "beaconServiceConnected", null);
+
 
         bindManager();
       }
@@ -188,17 +224,18 @@ public class BeaconsAndroidModule extends ReactContextBaseJavaModule implements 
   }
 
   public void bindManager() {
-    if (!mBeaconManager.isBound(this)) {
-      Log.d(LOG_TAG, "BeaconsAndroidModule - bindManager: ");
-      mBeaconManager.bind(this);
-    }
+    mBeaconManager.applySettings();
+//    if (!mBeaconManager.isBound(this)) {
+//      Log.d(LOG_TAG, "BeaconsAndroidModule - bindManager: ");
+//      mBeaconManager.bind(this);
+//    }
   }
 
   public void unbindManager() {
-    if (mBeaconManager.isBound(this)) {
-      Log.d(LOG_TAG, "BeaconsAndroidModule - unbindManager: ");
-      mBeaconManager.unbind(this);
-    }
+//    if (mBeaconManager.isBound(this)) {
+//      Log.d(LOG_TAG, "BeaconsAndroidModule - unbindManager: ");
+//      mBeaconManager.unbind(this);
+//    }
   }
 
   @ReactMethod
@@ -332,35 +369,39 @@ public class BeaconsAndroidModule extends ReactContextBaseJavaModule implements 
     callback.invoke(array);
   }
 
+  @ReactMethod
+  public void shouldDropEmptyRanges(boolean should) {
+    this.shouldDropEmptyRanges = should;
+  }
   /***********************************************************************************************
    * BeaconConsumer
    **********************************************************************************************/
-  @Override
-  public void onBeaconServiceConnect() {
-    Log.v(LOG_TAG, "onBeaconServiceConnect");
-
-    // deprecated since v2.9 (see github: https://github.com/AltBeacon/android-beacon-library/releases/tag/2.9)
-//         mBeaconManager.setMonitorNotifier(mMonitorNotifier);
-//         mBeaconManager.setRangeNotifier(mRangeNotifier);
-    mBeaconManager.addMonitorNotifier(mMonitorNotifier);
-    mBeaconManager.addRangeNotifier(mRangeNotifier);
-    sendEvent(mReactContext, "beaconServiceConnected", null);
-  }
-
-  @Override
-  public Context getApplicationContext() {
-    return mApplicationContext;
-  }
-
-  @Override
-  public void unbindService(ServiceConnection serviceConnection) {
-    mApplicationContext.unbindService(serviceConnection);
-  }
-
-  @Override
-  public boolean bindService(Intent intent, ServiceConnection serviceConnection, int i) {
-    return mApplicationContext.bindService(intent, serviceConnection, i);
-  }
+//  @Override
+//  public void onBeaconServiceConnect() {
+//    Log.v(LOG_TAG, "onBeaconServiceConnect");
+//
+//    // deprecated since v2.9 (see github: https://github.com/AltBeacon/android-beacon-library/releases/tag/2.9)
+////         mBeaconManager.setMonitorNotifier(mMonitorNotifier);
+////         mBeaconManager.setRangeNotifier(mRangeNotifier);
+//    mBeaconManager.addMonitorNotifier(mMonitorNotifier);
+//    mBeaconManager.addRangeNotifier(mRangeNotifier);
+//    sendEvent(mReactContext, "beaconServiceConnected", null);
+//  }
+//
+//  @Override
+//  public Context getApplicationContext() {
+//    return mApplicationContext;
+//  }
+//
+//  @Override
+//  public void unbindService(ServiceConnection serviceConnection) {
+//    mApplicationContext.unbindService(serviceConnection);
+//  }
+//
+//  @Override
+//  public boolean bindService(Intent intent, ServiceConnection serviceConnection, int i) {
+//    return mApplicationContext.bindService(intent, serviceConnection, i);
+//  }
 
   /***********************************************************************************************
    * Monitoring
@@ -459,8 +500,9 @@ public class BeaconsAndroidModule extends ReactContextBaseJavaModule implements 
     public void didRangeBeaconsInRegion(Collection<Beacon> beacons, Region region) {
       Log.d(LOG_TAG, "rangingConsumer didRangeBeaconsInRegion, beacons: " + beacons.toString());
       Log.d(LOG_TAG, "rangingConsumer didRangeBeaconsInRegion, region: " + region.toString());
-      sendEvent(mReactContext, "beaconsDidRange", createRangingResponse(beacons, region));
-
+      if (shouldDropEmptyRanges || !beacons.isEmpty()) {
+        sendEvent(mReactContext, "beaconsDidRange", createRangingResponse(beacons, region));
+      }
       if (!beacons.isEmpty()) {
         wakeUpAppIfNotRunning();
       }
@@ -510,12 +552,12 @@ public class BeaconsAndroidModule extends ReactContextBaseJavaModule implements 
 
   @ReactMethod
   public void stopRanging(String regionId, String beaconUuid, Callback resolve, Callback reject) {
-    if (!mBeaconManager.isBound(this)) {
-      return;
-    }
+//    if (!mBeaconManager.isBound(this)) {
+//      return;
+//    }
     Region region = createRegion(regionId, beaconUuid);
     try {
-      mBeaconManager.stopRangingBeaconsInRegion(region);
+      mBeaconManager.stopRangingBeacons(region);
       resolve.invoke();
     } catch (Exception e) {
       Log.e(LOG_TAG, "stopRanging, error: ", e);
